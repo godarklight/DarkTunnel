@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Client (GUI)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/DarkTunnel-GUI/bin/Debug/net5.0/DarkTunnel.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/DarkTunnel-GUI/bin/Debug/net5.0/",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Client",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/DarkTunnel.dll",
+            "args": [""],
+            "cwd": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/",
+            "console": "externalTerminal",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Server",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/DarkTunnel.dll",
+            "args": [""],
+            "cwd": "${workspaceFolder}/DarkTunnel/bin/Debug-Server/",
+            "console": "externalTerminal",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Master",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/DarkTunnel-Master/bin/Debug/net5.0/DarkTunnel-Master.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/DarkTunnel-Master/bin/Debug/net5.0/",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+    ]
+}

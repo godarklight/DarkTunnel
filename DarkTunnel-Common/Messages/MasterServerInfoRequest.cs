@@ -9,6 +9,7 @@ namespace DarkTunnel.Common.Messages
     {
         public int server;
         public int client;
+
         public void Serialize(BinaryWriter writer)
         {
             writer.Write(server);

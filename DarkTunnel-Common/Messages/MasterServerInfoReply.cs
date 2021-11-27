@@ -15,7 +15,6 @@ namespace DarkTunnel.Common.Messages
         public string message;
         public List<IPEndPoint> endpoints = new List<IPEndPoint>();
 
-
         public void Serialize(BinaryWriter writer)
         {
             writer.Write(server);

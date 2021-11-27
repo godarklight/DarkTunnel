@@ -1,14 +1,13 @@
 using System;
 using System.IO;
-using System.Text;
 
 namespace DarkTunnel.Common.Messages
 {
-    [MessageTypeAttribute(MessageType.NEW_CONNECTION_REPLY)]
-    public class NewConnectionReply : INodeMessage
+    [MessageTypeAttribute(MessageType.ACK)]
+    public class Ack : INodeMessage
     {
         public int id;
-        public int downloadRate;
+        public long streamAck;
 
         public int GetID()
         {
@@ -18,12 +17,12 @@ namespace DarkTunnel.Common.Messages
         public void Serialize(BinaryWriter writer)
         {
             writer.Write(id);
-            writer.Write(downloadRate);
+            writer.Write(streamAck);
         }
         public void Deserialize(BinaryReader reader)
         {
             id = reader.ReadInt32();
-            downloadRate = reader.ReadInt32();
+            streamAck = reader.ReadInt64();
         }
     }
 }

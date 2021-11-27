@@ -75,7 +75,7 @@ namespace DarkTunnel.Common
                     int sendSize = 8 + BitConverter.ToInt16(sendBytes, 6);
                     try
                     {
-                        udp.SendTo(sendBytes, 0, sendBytes.Length, SocketFlags.None, sendMessage.Item2);
+                        udp.SendTo(sendBytes, 0, sendSize, SocketFlags.None, sendMessage.Item2);
                     }
                     catch (Exception e)
                     {

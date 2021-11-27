@@ -85,7 +85,7 @@ namespace DarkTunnel.Master
                     mspr.message = "Registered OK";
                 }
                 Console.WriteLine($"MSPR: {mspr.id} status {mspr.message}");
-                connection.Send(message, endpoint);
+                connection.Send(mspr, endpoint);
             }
         }
     }

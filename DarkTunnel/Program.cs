@@ -74,7 +74,7 @@ namespace DarkTunnel
             Console.WriteLine("Press q or ctrl+c to quit.");
             bool hasConsole = true;
             bool running = true;
-            Console.CancelKeyPress += (s, e) => { running = false; Quit(); };
+            Console.CancelKeyPress += (s, e) => { running = false; tn.Stop(); };
             while (running)
             {
                 if (hasConsole)
@@ -98,10 +98,6 @@ namespace DarkTunnel
                     System.Threading.Thread.Sleep(1000);
                 }
             }
-        }
-
-        private static void Quit()
-        {
         }
     }
 }

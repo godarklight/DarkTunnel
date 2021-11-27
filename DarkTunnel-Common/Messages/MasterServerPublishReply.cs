@@ -10,6 +10,7 @@ namespace DarkTunnel.Common.Messages
         public int id;
         public bool status;
         public string message;
+
         public void Serialize(BinaryWriter writer)
         {
             writer.Write(id);

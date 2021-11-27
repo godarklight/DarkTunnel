@@ -13,6 +13,7 @@ namespace DarkTunnel
         public int localPort = 0;
         public int uploadSpeed = 512;
         public int downloadSpeed = 512;
+        public int minRetransmitTime = 50;
         public int masterServerID = 0;
         public int masterServerSecret = 0;
 
@@ -52,6 +53,9 @@ namespace DarkTunnel
                         case "downloadSpeed":
                             downloadSpeed = Int32.Parse(rhs);
                             break;
+                        case "minRetransmitTime":
+                            minRetransmitTime = Int32.Parse(rhs);
+                            break;
                         case "masterServerID":
                             masterServerID = Int32.Parse(rhs);
                             break;
@@ -85,6 +89,9 @@ namespace DarkTunnel
             sw.WriteLine("#uploadSpeed/downloadSpeed: Specify your connection limit (kB/s), this program sends at a fixed rate.");
             sw.WriteLine($"uploadSpeed={uploadSpeed}");
             sw.WriteLine($"downloadSpeed={downloadSpeed}");
+            sw.WriteLine();
+            sw.WriteLine("#minRetransmitTime: How many milliseconds delay to send unacknowledged packets");
+            sw.WriteLine($"minRetransmitTime={minRetransmitTime}");
             sw.WriteLine();
             sw.WriteLine("#masterServerID: Automatically register (server mode) or connect (client mode)");
             sw.WriteLine("#masterServerSecret: Do not change this or you will have to change your server ID (server mode only)");

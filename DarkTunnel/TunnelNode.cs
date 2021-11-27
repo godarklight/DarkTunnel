@@ -22,9 +22,14 @@ namespace DarkTunnel
         private IPAddress[] masterServerAddresses = Dns.GetHostAddresses("darktunnel.godarklight.privatedns.org");
         //Master state
         private long nextMasterTime = 0;
+        private TokenBucket connectionBucket;
 
         public TunnelNode(NodeOptions options)
         {
+            this.connectionBucket = new TokenBucket();
+            connectionBucket.rateBytesPerSecond = options.uploadSpeed * 1024;
+            //1 second connnection buffer
+            connectionBucket.totalBytes = connectionBucket.rateBytesPerSecond;
             this.options = options;
             if (options.isServer)
             {
@@ -70,10 +75,10 @@ namespace DarkTunnel
             while (running)
             {
                 long currentTime = DateTime.UtcNow.Ticks;
-                for (int i = clients.Count; i > 0; i--)
+                for (int i = clients.Count - 1; i >= 0; i--)
                 {
                     Client c = clients[i];
-                    c.Loop(connection);
+                    c.Loop();
                     if (!c.connected)
                     {
                         if (clientMapping.ContainsKey(c.id))
@@ -106,13 +111,14 @@ namespace DarkTunnel
             try
             {
                 TcpClient clientTcp = tcpServer.EndAcceptTcpClient(ar);
-                Client c = new Client();
+                Client c = new Client(options, connection, connectionBucket);
                 c.tcp = clientTcp;
                 c.tcp.NoDelay = true;
                 c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
                 c.id = random.Next();
                 Console.WriteLine($"New TCP Client {c.id}");
                 ConnectUDPClient(c);
+                clients.Add(c);
                 clientMapping[c.id] = c;
             }
             catch (Exception e)
@@ -132,6 +138,7 @@ namespace DarkTunnel
                     {
                         NewConnectionRequest ncr = new NewConnectionRequest();
                         ncr.id = c.id;
+                        ncr.downloadRate = options.downloadSpeed;
                         connection.Send(ncr, endpoint);
                     }
                 }
@@ -152,32 +159,51 @@ namespace DarkTunnel
 
         private void ReceiveCallback(IMessage message, IPEndPoint endpoint)
         {
+            if (message is INodeMessage)
+            {
+                int clientID = ((INodeMessage)message).GetID();
+                if (clientMapping.ContainsKey(clientID))
+                {
+                    Client c = clientMapping[clientID];
+                    c.lastUdpRecvTime = DateTime.UtcNow.Ticks;
+                }
+            }
             if (options.isServer && message is NewConnectionRequest)
             {
                 NewConnectionRequest nc = message as NewConnectionRequest;
                 NewConnectionReply ncr = new NewConnectionReply();
                 ncr.id = nc.id;
+                ncr.downloadRate = options.downloadSpeed;
                 Client c = null;
                 if (!clientMapping.ContainsKey(ncr.id))
                 {
-                    c = new Client();
+                    c = new Client(options, connection, connectionBucket);
                     c.id = nc.id;
-                    c.tcp = new TcpClient(AddressFamily.InterNetworkV6);
+                    c.tcp = new TcpClient(options.endpoints[0].AddressFamily);
                     c.tcp.NoDelay = true;
                     c.tcp.Connect(options.endpoints[0]);
                     c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
+                    clients.Add(c);
                     clientMapping.Add(c.id, c);
                 }
                 else
                 {
                     c = clientMapping[nc.id];
                 }
+                //Clamp to the clients download speed
+                Console.WriteLine($"Client {nc.id} download rate is {nc.downloadRate}KB/s");
+                if (nc.downloadRate < options.uploadSpeed)
+                {
+                    c.bucket.rateBytesPerSecond = nc.downloadRate * 1024;
+                    c.bucket.totalBytes = c.bucket.rateBytesPerSecond;
+                }
                 //Prefer IPv6
                 if (c.udpEndpoint == null || c.udpEndpoint.AddressFamily == AddressFamily.InterNetwork && endpoint.AddressFamily == AddressFamily.InterNetworkV6)
                 {
-                    Console.WriteLine($"NCR endpoint: {endpoint}");
+                    Console.WriteLine($"Client endpoint {c.id} set to: {endpoint}");
                     c.udpEndpoint = endpoint;
                 }
+                connection.Send(ncr, endpoint);
             }
             if (!options.isServer && message is NewConnectionReply)
             {
@@ -188,8 +214,15 @@ namespace DarkTunnel
                     //Prefer IPv6
                     if (c.udpEndpoint == null || c.udpEndpoint.AddressFamily == AddressFamily.InterNetwork && endpoint.AddressFamily == AddressFamily.InterNetworkV6)
                     {
-                        Console.WriteLine($"NCR endpoint: {endpoint}");
+                        Console.WriteLine($"Server endpoint {c.id} set to: {endpoint}");
                         c.udpEndpoint = endpoint;
+                    }
+                    //Clamp to the servers download speed
+                    Console.WriteLine($"Servers download rate is {ncr.downloadRate}KB/s");
+                    if (ncr.downloadRate < options.uploadSpeed)
+                    {
+                        c.bucket.rateBytesPerSecond = ncr.downloadRate * 1024;
+                        c.bucket.totalBytes = c.bucket.rateBytesPerSecond;
                     }
                 }
             }
@@ -221,10 +254,42 @@ namespace DarkTunnel
                     {
                         NewConnectionRequest ncr = new NewConnectionRequest();
                         ncr.id = msir.client;
+                        ncr.downloadRate = options.downloadSpeed;
                         Console.WriteLine($"MSIR connect: {msirEndpoint}");
                         connection.Send(ncr, msirEndpoint);
                     }
                 }
+            }
+            if (message is MasterServerPublishReply)
+            {
+                MasterServerPublishReply mspr = message as MasterServerPublishReply;
+                Console.WriteLine($"Publish Reply for {mspr.id}, registered {mspr.status}, {mspr.message}");
+            }
+            if (message is Data)
+            {
+                Data d = message as Data;
+                if (clientMapping.ContainsKey(d.id))
+                {
+                    Client c = clientMapping[d.id];
+                    c.ReceiveData(d, true);
+                }
+            }
+            if (message is Ack)
+            {
+                Ack ack = message as Ack;
+                if (clientMapping.ContainsKey(ack.id))
+                {
+                    Client c = clientMapping[ack.id];
+                    if (c.txQueue.StreamReadPos < ack.streamAck)
+                    {
+                        c.txQueue.MarkFree(ack.streamAck);
+                    }
+                }
+            }
+            if (message is PrintConsole)
+            {
+                PrintConsole pc = message as PrintConsole;
+                Console.WriteLine($"Remote Message: {pc.message}");
             }
         }
 
@@ -233,8 +298,26 @@ namespace DarkTunnel
             Client c = ar.AsyncState as Client;
             try
             {
-                //TODO:
+
                 int bytesRead = c.tcp.GetStream().EndRead(ar);
+                if (bytesRead == 0)
+                {
+                    c.Disconnect();
+                    return;
+                }
+                else
+                {
+                    c.txQueue.Write(c.buffer, 0, bytesRead);
+                    //If our txqueue is full we need to wait before we can write to it.
+                    while (c.txQueue.AvailableWrite < c.buffer.Length)
+                    {
+                        if (!c.connected)
+                        {
+                            return;
+                        }
+                        Thread.Sleep(10);
+                    }
+                }
                 Console.WriteLine($"TCP RECV {bytesRead}");
                 c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
             }

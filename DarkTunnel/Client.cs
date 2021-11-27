@@ -121,21 +121,19 @@ namespace DarkTunnel
             //Data from the past
             if (d.streamPos + d.tcpData.Length <= currentRecvPos)
             {
-                Console.WriteLine($"Past {d.tcpData.Length}");
                 return;
             }
             //Exact packet we need, include partial matches
-            if (currentRecvPos - d.streamPos < d.tcpData.Length)
+            if (d.streamPos + d.tcpData.Length > currentRecvPos && d.streamPos <= currentRecvPos)
             {
                 int offset = (int)(currentRecvPos - d.streamPos);
-                Console.WriteLine($"TCP SEND {d.tcpData.Length - offset}");
                 tcp.GetStream().Write(d.tcpData, offset, d.tcpData.Length - offset);
                 currentRecvPos += d.tcpData.Length - offset;
                 return;
             }
             //Future packet
             futureData.Enqueue(d);
-            Console.WriteLine($"Future {d.tcpData.Length}");
+            Console.WriteLine($"Future {d.tcpData.Length} queue: {futureData.Count}");
             if (fromUDP)
             {
                 ProcessFutureData();

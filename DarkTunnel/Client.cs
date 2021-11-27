@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using DarkTunnel.Common;
 using DarkTunnel.Common.Messages;
 
@@ -25,10 +26,11 @@ namespace DarkTunnel
         private long nextWriteResetTime;
         private const long TIMEOUT = 10 * TimeSpan.TicksPerSecond;
         private const long HEARTBEAT = 2 * TimeSpan.TicksPerSecond;
-        private const long ACK_TIME = 100 * TimeSpan.TicksPerMillisecond;
+        private long ACK_TIME = 25 * TimeSpan.TicksPerMillisecond;
         private UdpConnection connection;
         private NodeOptions options;
         private ConcurrentQueue<Data> futureData = new ConcurrentQueue<Data>();
+        private long ackSafe;
 
         public Client(NodeOptions options, UdpConnection connection, TokenBucket connectionBucket)
         {
@@ -76,8 +78,40 @@ namespace DarkTunnel
             SendData();
         }
 
-        public void SendData()
+        private void ProcessFutureData()
         {
+            int count = futureData.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (futureData.TryDequeue(out Data d))
+                {
+                    ReceiveData(d, false);
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
+
+        public void ReceiveAck(Ack ack)
+        {
+            if (ack.streamAck > ackSafe)
+            {
+                ackSafe = ack.streamAck;
+            }
+        }
+
+        private void SendData()
+        {
+            if (txQueue.StreamReadPos < ackSafe)
+            {
+                txQueue.MarkFree(ackSafe);
+            }
+            if (currentSendPos < txQueue.StreamReadPos)
+            {
+                currentSendPos = txQueue.StreamReadPos;
+            }
             long currentTime = DateTime.UtcNow.Ticks;
             if (currentTime > nextWriteResetTime)
             {
@@ -109,50 +143,40 @@ namespace DarkTunnel
                 lastUdpSendTime = currentTime;
                 connection.Send(d, udpEndpoint);
                 currentSendPos += bytesToWrite;
+                bucket.Take((int)bytesToWrite);
             }
         }
 
+
+
         public void ReceiveData(Data d, bool fromUDP)
         {
-            if (d.streamAck > txQueue.StreamReadPos)
+            if (d.streamAck > ackSafe)
             {
-                txQueue.MarkFree(d.streamAck);
+                ackSafe = d.streamAck;
             }
             //Data from the past
             if (d.streamPos + d.tcpData.Length <= currentRecvPos)
             {
                 return;
             }
-            //Exact packet we need, include partial matches
-            if (d.streamPos + d.tcpData.Length > currentRecvPos && d.streamPos <= currentRecvPos)
+
+            //Data in the future
+            if (d.streamPos > currentRecvPos)
             {
-                int offset = (int)(currentRecvPos - d.streamPos);
-                tcp.GetStream().Write(d.tcpData, offset, d.tcpData.Length - offset);
-                currentRecvPos += d.tcpData.Length - offset;
+                futureData.Enqueue(d);
                 return;
             }
+
+            //Exact packet we need, include partial matches
+            int offset = (int)(currentRecvPos - d.streamPos);
+            tcp.GetStream().Write(d.tcpData, offset, d.tcpData.Length - offset);
+            currentRecvPos += d.tcpData.Length - offset;
+
             //Future packet
-            futureData.Enqueue(d);
-            Console.WriteLine($"Future {d.tcpData.Length} queue: {futureData.Count}");
             if (fromUDP)
             {
                 ProcessFutureData();
-            }
-        }
-
-        private void ProcessFutureData()
-        {
-            int count = futureData.Count;
-            for (int i = 0; i < count; i++)
-            {
-                if (futureData.TryDequeue(out Data d))
-                {
-                    ReceiveData(d, false);
-                }
-                else
-                {
-                    return;
-                }
             }
         }
 

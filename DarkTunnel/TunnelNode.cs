@@ -78,7 +78,6 @@ namespace DarkTunnel
                 for (int i = clients.Count - 1; i >= 0; i--)
                 {
                     Client c = clients[i];
-                    c.Loop();
                     if (!c.connected)
                     {
                         if (clientMapping.ContainsKey(c.id))
@@ -87,7 +86,10 @@ namespace DarkTunnel
                         }
                         clients.Remove(c);
                     }
-
+                    else
+                    {
+                        c.Loop();
+                    }
                 }
                 if (options.isServer && options.masterServerID != 0 && currentTime > nextMasterTime)
                 {
@@ -102,7 +104,7 @@ namespace DarkTunnel
                         connection.Send(mspr, new IPEndPoint(masterAddr, 16702));
                     }
                 }
-                Thread.Sleep(50);
+                Thread.Sleep(5);
             }
         }
 
@@ -280,10 +282,7 @@ namespace DarkTunnel
                 if (clientMapping.ContainsKey(ack.id))
                 {
                     Client c = clientMapping[ack.id];
-                    if (c.txQueue.StreamReadPos < ack.streamAck)
-                    {
-                        c.txQueue.MarkFree(ack.streamAck);
-                    }
+                    c.ReceiveAck(ack);
                 }
             }
             if (message is PrintConsole)
@@ -318,7 +317,6 @@ namespace DarkTunnel
                         Thread.Sleep(10);
                     }
                 }
-                Console.WriteLine($"TCP RECV {bytesRead}");
                 c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
             }
             catch

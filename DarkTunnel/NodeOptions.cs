@@ -8,12 +8,12 @@ namespace DarkTunnel
     public class NodeOptions
     {
         public bool isServer = false;
-        public string endpoint = "serverhost.address.example.com:26072";
+        public string endpoint = "serverhost.address.example.com:26702";
         public List<IPEndPoint> endpoints = new List<IPEndPoint>();
         public int localPort = 0;
         public int uploadSpeed = 512;
         public int downloadSpeed = 512;
-        public int minRetransmitTime = 50;
+        public int minRetransmitTime = 100;
         public int masterServerID = 0;
         public int masterServerSecret = 0;
 

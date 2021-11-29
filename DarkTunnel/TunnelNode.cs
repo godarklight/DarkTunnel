@@ -42,6 +42,7 @@ namespace DarkTunnel
             }
             connection = new UdpConnection(udp, ReceiveCallback);
             mainLoop = new Thread(new ThreadStart(MainLoop));
+            mainLoop.Name = "TunnelNode-MainLoop";
             mainLoop.Start();
         }
 
@@ -65,6 +66,7 @@ namespace DarkTunnel
         private void SetupTCPServer()
         {
             tcpServer = new TcpListener(new IPEndPoint(IPAddress.IPv6Any, options.localPort));
+            tcpServer.Server.DualMode = true;
             tcpServer.Start();
             tcpServer.BeginAcceptTcpClient(ConnectCallback, null);
         }
@@ -86,10 +88,6 @@ namespace DarkTunnel
                         }
                         clients.Remove(c);
                     }
-                    else
-                    {
-                        c.Loop();
-                    }
                 }
                 if (options.isServer && options.masterServerID != 0 && currentTime > nextMasterTime)
                 {
@@ -104,7 +102,7 @@ namespace DarkTunnel
                         connection.Send(mspr, new IPEndPoint(masterAddr, 16702));
                     }
                 }
-                Thread.Sleep(5);
+                Thread.Sleep(100);
             }
         }
 
@@ -112,13 +110,10 @@ namespace DarkTunnel
         {
             try
             {
-                TcpClient clientTcp = tcpServer.EndAcceptTcpClient(ar);
-                Client c = new Client(options, connection, connectionBucket);
-                c.tcp = clientTcp;
-                c.tcp.NoDelay = true;
-                c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
-                c.id = random.Next();
-                Console.WriteLine($"New TCP Client {c.id}");
+                TcpClient tcp = tcpServer.EndAcceptTcpClient(ar);
+                int newID = random.Next();
+                Client c = new Client(options, newID, connection, tcp, connectionBucket);
+                Console.WriteLine($"New TCP Client {c.id} from {tcp.Client.RemoteEndPoint}");
                 ConnectUDPClient(c);
                 clients.Add(c);
                 clientMapping[c.id] = c;
@@ -140,6 +135,7 @@ namespace DarkTunnel
                     {
                         NewConnectionRequest ncr = new NewConnectionRequest();
                         ncr.id = c.id;
+                        ncr.protocol_version = Header.PROTOCOL_VERSION;
                         ncr.downloadRate = options.downloadSpeed;
                         connection.Send(ncr, endpoint);
                     }
@@ -149,7 +145,7 @@ namespace DarkTunnel
             {
                 foreach (IPAddress addr in masterServerAddresses)
                 {
-                    for (int i = 0; i < 2; i++)
+                    for (int i = 0; i < 4; i++)
                     {
                         MasterServerInfoRequest msir = new MasterServerInfoRequest();
                         msir.server = c.id;
@@ -175,23 +171,39 @@ namespace DarkTunnel
                 NewConnectionRequest nc = message as NewConnectionRequest;
                 NewConnectionReply ncr = new NewConnectionReply();
                 ncr.id = nc.id;
+                ncr.protocol_version = Header.PROTOCOL_VERSION;
                 ncr.downloadRate = options.downloadSpeed;
+                //Do not connect protocol-incompatible clients.
+                if (nc.protocol_version != Header.PROTOCOL_VERSION)
+                {
+                    return;
+                }
                 Client c = null;
                 if (!clientMapping.ContainsKey(ncr.id))
                 {
-                    c = new Client(options, connection, connectionBucket);
-                    c.id = nc.id;
-                    c.tcp = new TcpClient(options.endpoints[0].AddressFamily);
-                    c.tcp.NoDelay = true;
-                    c.tcp.Connect(options.endpoints[0]);
-                    c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
-                    clients.Add(c);
-                    clientMapping.Add(c.id, c);
+                    TcpClient tcp = new TcpClient(AddressFamily.InterNetworkV6);
+                    tcp.Client.DualMode = true;
+                    try
+                    {
+                        tcp.Connect(options.endpoints[0]);
+                        c = new Client(options, nc.id, connection, tcp, connectionBucket);
+                        clients.Add(c);
+                        clientMapping.Add(c.id, c);
+                    }
+                    catch
+                    {
+                        Disconnect dis = new Disconnect();
+                        dis.id = nc.id;
+                        dis.reason = "TCP server is currently not running";
+                        connection.Send(dis, endpoint);
+                        return;
+                    }
                 }
                 else
                 {
                     c = clientMapping[nc.id];
                 }
+                connection.Send(ncr, endpoint);
                 //Clamp to the clients download speed
                 Console.WriteLine($"Client {nc.id} download rate is {nc.downloadRate}KB/s");
                 if (nc.downloadRate < options.uploadSpeed)
@@ -205,11 +217,15 @@ namespace DarkTunnel
                     Console.WriteLine($"Client endpoint {c.id} set to: {endpoint}");
                     c.udpEndpoint = endpoint;
                 }
-                connection.Send(ncr, endpoint);
             }
             if (!options.isServer && message is NewConnectionReply)
             {
                 NewConnectionReply ncr = message as NewConnectionReply;
+                if (ncr.protocol_version != Header.PROTOCOL_VERSION)
+                {
+                    Console.WriteLine($"Unable to connect to incompatible server, our version: {Header.PROTOCOL_VERSION}, server: {ncr.protocol_version}");
+                    return;
+                }
                 if (clientMapping.ContainsKey(ncr.id))
                 {
                     Client c = clientMapping[ncr.id];
@@ -256,6 +272,7 @@ namespace DarkTunnel
                     {
                         NewConnectionRequest ncr = new NewConnectionRequest();
                         ncr.id = msir.client;
+                        ncr.protocol_version = Header.PROTOCOL_VERSION;
                         ncr.downloadRate = options.downloadSpeed;
                         Console.WriteLine($"MSIR connect: {msirEndpoint}");
                         connection.Send(ncr, msirEndpoint);
@@ -275,6 +292,10 @@ namespace DarkTunnel
                     Client c = clientMapping[d.id];
                     c.ReceiveData(d, true);
                 }
+                else
+                {
+                    
+                }
             }
             if (message is Ack)
             {
@@ -284,45 +305,51 @@ namespace DarkTunnel
                     Client c = clientMapping[ack.id];
                     c.ReceiveAck(ack);
                 }
+                else
+                {
+                    
+                }
+            }
+            if (message is PingRequest)
+            {
+                PingRequest pr = message as PingRequest;
+                if (clientMapping.ContainsKey(pr.id))
+                {
+                    PingReply preply = new PingReply();
+                    preply.id = pr.id;
+                    preply.sendTime = pr.sendTime;
+                    connection.Send(preply, endpoint);
+                }
+            }
+            if (message is PingReply)
+            {
+                PingReply pr = message as PingReply;
+                long currentTime = DateTime.UtcNow.Ticks;
+                long timeDelta = currentTime - pr.sendTime;
+                int timeMs = (int)(timeDelta / TimeSpan.TicksPerMillisecond);
+                if (clientMapping.ContainsKey(pr.id))
+                {
+                    Client c = clientMapping[pr.id];
+                    c.latency = timeMs;
+                }
             }
             if (message is PrintConsole)
             {
                 PrintConsole pc = message as PrintConsole;
                 Console.WriteLine($"Remote Message: {pc.message}");
             }
-        }
-
-        private void TCPReceiveCallback(IAsyncResult ar)
-        {
-            Client c = ar.AsyncState as Client;
-            try
+            if (message is Disconnect)
             {
-
-                int bytesRead = c.tcp.GetStream().EndRead(ar);
-                if (bytesRead == 0)
+                Disconnect dis = message as Disconnect;
+                if (clientMapping.ContainsKey(dis.id))
                 {
-                    c.Disconnect();
-                    return;
+                    Client c = clientMapping[dis.id];
+                    c.Disconnect("Remote side requested a disconnect");
+                    Console.WriteLine($"Stream {dis.id} remotely disconnected because: {dis.reason}");
                 }
-                else
-                {
-                    c.txQueue.Write(c.buffer, 0, bytesRead);
-                    //If our txqueue is full we need to wait before we can write to it.
-                    while (c.txQueue.AvailableWrite < c.buffer.Length)
-                    {
-                        if (!c.connected)
-                        {
-                            return;
-                        }
-                        Thread.Sleep(10);
-                    }
-                }
-                c.tcp.GetStream().BeginRead(c.buffer, 0, c.buffer.Length, TCPReceiveCallback, c);
-            }
-            catch
-            {
-                c.Disconnect();
             }
         }
+
+
     }
 }

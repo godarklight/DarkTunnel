@@ -9,6 +9,8 @@ namespace DarkTunnel.Common
         DISCONNECT = 1,
         NEW_CONNECTION_REQUEST = 10,
         NEW_CONNECTION_REPLY = 11,
+        PING_REQUEST = 20,
+        PING_REPLY = 21,
         DATA = 30,
         ACK = 31,
         MASTER_SERVER_INFO_REQUEST = 100,

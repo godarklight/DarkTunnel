@@ -11,6 +11,7 @@ namespace DarkTunnel.Common
 {
     public static class Header
     {
+        public const int PROTOCOL_VERSION = 1;
         private static bool loaded = false;
         private static Dictionary<MessageType, Type> mt2t = new Dictionary<MessageType, Type>();
         private static Dictionary<Type, MessageType> t2mt = new Dictionary<Type, MessageType>();

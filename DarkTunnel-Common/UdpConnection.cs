@@ -22,8 +22,10 @@ namespace DarkTunnel.Common
             this.udp = udp;
             this.receiveCallback = receiveCallback;
             recvThread = new Thread(new ThreadStart(ReceiveLoop));
+            recvThread.Name = "UdpConnection-Receive";
             recvThread.Start();
             sendThread = new Thread(new ThreadStart(SendLoop));
+            sendThread.Name = "UdpConnection-Send";
             sendThread.Start();
         }
 

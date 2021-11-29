@@ -23,7 +23,7 @@
             "program": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/DarkTunnel.dll",
             "args": [""],
             "cwd": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/",
-            "console": "externalTerminal",
+            "console": "internalConsole",
             "stopAtEntry": false
         },
         {
@@ -34,7 +34,7 @@
             "program": "${workspaceFolder}/DarkTunnel/bin/Debug/net5.0/DarkTunnel.dll",
             "args": [""],
             "cwd": "${workspaceFolder}/DarkTunnel/bin/Debug-Server/",
-            "console": "externalTerminal",
+            "console": "internalConsole",
             "stopAtEntry": false
         },
         {

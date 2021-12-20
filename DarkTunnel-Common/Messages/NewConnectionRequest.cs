@@ -10,6 +10,7 @@ namespace DarkTunnel.Common.Messages
         public int id;
         public int protocol_version;
         public int downloadRate;
+        public String ep;
 
         public int GetID()
         {
@@ -21,12 +22,14 @@ namespace DarkTunnel.Common.Messages
             writer.Write(id);
             writer.Write(protocol_version);
             writer.Write(downloadRate);
+            writer.Write(ep);
         }
         public void Deserialize(BinaryReader reader)
         {
             id = reader.ReadInt32();
             protocol_version = reader.ReadInt32();
             downloadRate = reader.ReadInt32();
+            ep = reader.ReadString();
         }
     }
 }

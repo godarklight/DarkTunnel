@@ -8,6 +8,7 @@ namespace DarkTunnel.Common.Messages
     {
         public int id;
         public long sendTime;
+        public String ep;
 
         public int GetID()
         {
@@ -18,11 +19,13 @@ namespace DarkTunnel.Common.Messages
         {
             writer.Write(id);
             writer.Write(sendTime);
+            writer.Write(ep);
         }
         public void Deserialize(BinaryReader reader)
         {
             id = reader.ReadInt32();
             sendTime = reader.ReadInt64();
+            ep = reader.ReadString();
         }
     }
 }

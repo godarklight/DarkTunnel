@@ -9,8 +9,10 @@ namespace DarkTunnel
     {
         public bool isServer = false;
         public string endpoint = "serverhost.address.example.com:26702";
+        public string remoteIP = "127.0.0.1";
         public List<IPEndPoint> endpoints = new List<IPEndPoint>();
         public int localPort = 0;
+        public int mediationClientPort = 5000;
         public int uploadSpeed = 512;
         public int downloadSpeed = 512;
         public int minRetransmitTime = 100;
@@ -44,8 +46,14 @@ namespace DarkTunnel
                             endpoint = rhs;
                             ResolveAddress();
                             break;
+                        case "remoteIP":
+                            remoteIP = rhs;
+                            break;
                         case "localPort":
                             localPort = Int32.Parse(rhs);
+                            break;
+                        case "mediationClientPort":
+                            mediationClientPort = Int32.Parse(rhs);
                             break;
                         case "uploadSpeed":
                             uploadSpeed = Int32.Parse(rhs);
@@ -83,8 +91,14 @@ namespace DarkTunnel
             sw.WriteLine("#endpoint, servers: The TCP server to connect to for forwarding over UDP. Client: The UDP server to connect to (not used when masterServerID is set)");
             sw.WriteLine($"endpoint={endpoint}");
             sw.WriteLine();
+            sw.WriteLine("#remoteIP, clients: The public IP of the peer you want to connect to.");
+            sw.WriteLine($"remoteIP={remoteIP}");
+            sw.WriteLine();
             sw.WriteLine("#localPort: servers: The UDP server port. client: The TCP port to hose the forwarded server on.");
             sw.WriteLine($"localPort={localPort}");
+            sw.WriteLine();
+            sw.WriteLine("#mediationClientPort: The UDP mediation client port. This is the port that will have a hole punched through the NAT by the mediation server, and all traffic will pass through it.");
+            sw.WriteLine($"mediationClientPort={mediationClientPort}");
             sw.WriteLine();
             sw.WriteLine("#uploadSpeed/downloadSpeed: Specify your connection limit (kB/s), this program sends at a fixed rate.");
             sw.WriteLine($"uploadSpeed={uploadSpeed}");

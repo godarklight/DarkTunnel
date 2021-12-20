@@ -26,7 +26,7 @@ namespace DarkTunnel.Common
                 Load();
             }
 
-            using (MemoryStream ms = new MemoryStream(buildBytes, true))
+            using (MemoryStream ms = new MemoryStream(buildBytes))
             {
                 using (BinaryWriter bw = new BinaryWriter(ms, System.Text.Encoding.UTF8, true))
                 {

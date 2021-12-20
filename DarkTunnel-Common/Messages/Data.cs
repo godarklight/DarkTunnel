@@ -10,6 +10,7 @@ namespace DarkTunnel.Common.Messages
         public long streamPos;
         public long streamAck;
         public byte[] tcpData;
+        public String ep;
 
         public int GetID()
         {
@@ -23,6 +24,7 @@ namespace DarkTunnel.Common.Messages
             writer.Write(streamAck);
             writer.Write((short)tcpData.Length);
             writer.Write(tcpData);
+            writer.Write(ep);
         }
         public void Deserialize(BinaryReader reader)
         {
@@ -31,6 +33,7 @@ namespace DarkTunnel.Common.Messages
             streamAck = reader.ReadInt64();
             int length = reader.ReadInt16();
             tcpData = reader.ReadBytes(length);
+            ep = reader.ReadString();
         }
     }
 }

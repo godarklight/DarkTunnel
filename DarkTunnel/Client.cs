@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Text;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace DarkTunnel
         public long lastUdpSendAckTime;
         public TcpClient tcp;
         public IPEndPoint udpEndpoint;
-        public byte[] buffer = new byte[1024];
+        public byte[] buffer = new byte[1500];
         public StreamRingBuffer txQueue = new StreamRingBuffer(16 * 1024 * 1024);
         public FutureDataStore fds = new FutureDataStore();
         public TokenBucket bucket;
@@ -37,6 +38,7 @@ namespace DarkTunnel
         private Thread clientThread;
         public AutoResetEvent sendEvent = new AutoResetEvent(false);
         public int latency;
+        public IPEndPoint localTCPEndpoint;
 
         public Client(NodeOptions options, int clientID, UdpConnection connection, TcpClient tcp, TokenBucket parentBucket)
         {
@@ -44,6 +46,7 @@ namespace DarkTunnel
             this.tcp = tcp;
             this.connection = connection;
             this.options = options;
+            this.localTCPEndpoint = (IPEndPoint)tcp.Client.LocalEndPoint;
 
             tcp.NoDelay = true;
             tcp.GetStream().BeginRead(buffer, 0, buffer.Length, TCPReceiveCallback, null);
@@ -97,6 +100,7 @@ namespace DarkTunnel
                 PingRequest pr = new PingRequest();
                 pr.id = id;
                 pr.sendTime = currentTime;
+                pr.ep = $"end{localTCPEndpoint}";
                 connection.Send(pr, udpEndpoint);
             }
         }
@@ -112,6 +116,7 @@ namespace DarkTunnel
                 Ack ack = new Ack();
                 ack.id = id;
                 ack.streamAck = currentRecvPos;
+                ack.ep = $"end{localTCPEndpoint}";
                 connection.Send(ack, udpEndpoint);
             }
         }
@@ -180,9 +185,9 @@ namespace DarkTunnel
             }
 
             //Clamp to 500 byte packets
-            if (bytesToWrite > 500)
+            if (bytesToWrite > 1000)
             {
-                bytesToWrite = 500;
+                bytesToWrite = 1000;
             }
 
             //Send data
@@ -192,6 +197,8 @@ namespace DarkTunnel
             d.streamAck = currentRecvPos;
             d.tcpData = new byte[bytesToWrite];
             txQueue.Read(d.tcpData, 0, currentSendPos, (int)bytesToWrite);
+            //after d.tcpData has been written, convert to string, append localhost:port to end of payload, change back to bytes
+            d.ep = $"end{localTCPEndpoint}";
             lastUdpSendAckTime = currentTime;
             lastUdpSendTime = currentTime;
             connection.Send(d, udpEndpoint);
@@ -294,6 +301,7 @@ namespace DarkTunnel
                     Disconnect dis = new Disconnect();
                     dis.id = id;
                     dis.reason = reason;
+                    dis.ep = $"end{localTCPEndpoint}";
                     connection.Send(dis, udpEndpoint);
                 }
             }

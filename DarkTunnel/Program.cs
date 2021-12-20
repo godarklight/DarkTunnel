@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace DarkTunnel
 {
@@ -48,6 +50,29 @@ namespace DarkTunnel
                     Console.WriteLine("Failed to load config.txt");
                     return;
                 }
+            }
+            
+            TcpClient tcpClient = new TcpClient();
+
+            UdpClient udpClient = new UdpClient(options.mediationClientPort);
+
+            if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows)){
+                int SIO_UDP_CONNRESET = -1744830452;
+                udpClient.Client.IOControl((IOControlCode)SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
+            }
+
+            IPEndPoint ep = new IPEndPoint(IPAddress.Parse("150.136.166.80"), 6510);
+
+            IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5001);
+
+            MediationClient mc = new MediationClient(tcpClient, udpClient, ep, options.remoteIP, options.mediationClientPort, endpoint, options.isServer);
+
+            mc.TrackedClient();
+            
+            if(options.isServer){
+                mc.UdpServer();
+            } else {
+                mc.UdpClient();
             }
 
             TunnelNode tn = new TunnelNode(options);

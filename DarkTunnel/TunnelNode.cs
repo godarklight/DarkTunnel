@@ -65,8 +65,8 @@ namespace DarkTunnel
 
         private void SetupTCPServer()
         {
-            tcpServer = new TcpListener(new IPEndPoint(IPAddress.IPv6Any, options.localPort));
-            tcpServer.Server.DualMode = true;
+            tcpServer = new TcpListener(new IPEndPoint(IPAddress.Any, options.localPort));
+            //tcpServer.Server.DualMode = true;
             tcpServer.Start();
             tcpServer.BeginAcceptTcpClient(ConnectCallback, null);
         }
@@ -84,7 +84,9 @@ namespace DarkTunnel
                     {
                         if (clientMapping.ContainsKey(c.id))
                         {
+                            MediationClient.Remove(clientMapping[c.id].localTCPEndpoint);
                             clientMapping.Remove(c.id);
+                            
                         }
                         clients.Remove(c);
                     }
@@ -137,6 +139,7 @@ namespace DarkTunnel
                         ncr.id = c.id;
                         ncr.protocol_version = Header.PROTOCOL_VERSION;
                         ncr.downloadRate = options.downloadSpeed;
+                        ncr.ep = $"end{c.localTCPEndpoint}";
                         connection.Send(ncr, endpoint);
                     }
                 }
@@ -181,20 +184,23 @@ namespace DarkTunnel
                 Client c = null;
                 if (!clientMapping.ContainsKey(ncr.id))
                 {
-                    TcpClient tcp = new TcpClient(AddressFamily.InterNetworkV6);
-                    tcp.Client.DualMode = true;
+                    TcpClient tcp = new TcpClient(AddressFamily.InterNetwork);
+                    //tcp.Client.DualMode = true;
                     try
                     {
                         tcp.Connect(options.endpoints[0]);
                         c = new Client(options, nc.id, connection, tcp, connectionBucket);
                         clients.Add(c);
                         clientMapping.Add(c.id, c);
+                        MediationClient.Add(c.localTCPEndpoint);
+                        //add mapping for local tcp client and remote IP
                     }
                     catch
                     {
                         Disconnect dis = new Disconnect();
                         dis.id = nc.id;
                         dis.reason = "TCP server is currently not running";
+                        dis.ep = $"end{c.localTCPEndpoint}";
                         connection.Send(dis, endpoint);
                         return;
                     }
@@ -203,6 +209,7 @@ namespace DarkTunnel
                 {
                     c = clientMapping[nc.id];
                 }
+                ncr.ep = $"end{c.localTCPEndpoint}";
                 connection.Send(ncr, endpoint);
                 //Clamp to the clients download speed
                 Console.WriteLine($"Client {nc.id} download rate is {nc.downloadRate}KB/s");
@@ -274,6 +281,7 @@ namespace DarkTunnel
                         ncr.id = msir.client;
                         ncr.protocol_version = Header.PROTOCOL_VERSION;
                         ncr.downloadRate = options.downloadSpeed;
+                        ncr.ep = $"end{c.localTCPEndpoint}";
                         Console.WriteLine($"MSIR connect: {msirEndpoint}");
                         connection.Send(ncr, msirEndpoint);
                     }
@@ -315,9 +323,11 @@ namespace DarkTunnel
                 PingRequest pr = message as PingRequest;
                 if (clientMapping.ContainsKey(pr.id))
                 {
+                    Client c = clientMapping[pr.id];
                     PingReply preply = new PingReply();
                     preply.id = pr.id;
                     preply.sendTime = pr.sendTime;
+                    preply.ep = $"end{c.localTCPEndpoint}";
                     connection.Send(preply, endpoint);
                 }
             }

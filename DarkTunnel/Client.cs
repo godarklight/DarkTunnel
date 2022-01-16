@@ -185,9 +185,9 @@ namespace DarkTunnel
             }
 
             //Clamp to 500 byte packets
-            if (bytesToWrite > 1000)
+            if (bytesToWrite > 1250)
             {
-                bytesToWrite = 1000;
+                bytesToWrite = 1250;
             }
 
             //Send data

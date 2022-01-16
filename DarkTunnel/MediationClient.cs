@@ -29,6 +29,7 @@ namespace DarkTunnel {
         private bool isServer = false;
         private List<IPEndPoint> connectedClients = new List<IPEndPoint>();
         public static Dictionary<IPEndPoint, IPEndPoint> mapping = new Dictionary<IPEndPoint, IPEndPoint>();
+        public static Dictionary<IPEndPoint, int> timeoutClients = new Dictionary<IPEndPoint, int>();
         public static IPEndPoint mostRecentEP = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 65535);
         public MediationClient(TcpClient tcpClient, UdpClient udpClient, IPEndPoint ep, String remoteIP, int mediationClientPort, IPEndPoint programEndpoint, bool isServer){
             this.tcpClient = tcpClient;
@@ -41,7 +42,7 @@ namespace DarkTunnel {
         }
 
         public static void Add(IPEndPoint localEP){
-            Console.WriteLine($"bettttttttt {localEP} and {mostRecentEP}");
+            Console.WriteLine($"pls {localEP} and {mostRecentEP}");
             mapping.Add(localEP, mostRecentEP);
         }
 
@@ -69,6 +70,19 @@ namespace DarkTunnel {
                     udpClient.Send(sendBuffer, sendBuffer.Length, new IPEndPoint(IPAddress.Parse(intendedIP), intendedPort));
                 }
                 Console.WriteLine("Keep alive");
+            }
+
+            foreach(var (key, value) in timeoutClients){
+                Console.WriteLine($"time left: {value}");
+                if(value >= 1){
+                    int timeRemaining = value;
+                    timeRemaining--;
+                    timeoutClients[key] = timeRemaining;
+                } else {
+                    Console.WriteLine($"timed out {key}");
+                    connectedClients.Remove(key);
+                    timeoutClients.Remove(key);
+                }
             }
         }
 
@@ -106,7 +120,7 @@ namespace DarkTunnel {
             udpClientThread = new Thread(new ThreadStart(UdpClientListenLoop));
             udpClientThread.Start();
             //Start timer for hole punch init and keep alive
-            System.Timers.Timer Timer = new System.Timers.Timer(500);
+            System.Timers.Timer Timer = new System.Timers.Timer(1000);
             Timer.Elapsed += OnTimedEvent;
             Timer.AutoReset = true;
             Timer.Enabled = true;
@@ -128,7 +142,7 @@ namespace DarkTunnel {
             udpServerThread = new Thread(new ThreadStart(UdpServerListenLoop));
             udpServerThread.Start();
             //Start timer for hole punch init and keep alive
-            System.Timers.Timer Timer = new System.Timers.Timer(500);
+            System.Timers.Timer Timer = new System.Timers.Timer(1000);
             Timer.Elapsed += OnTimedEvent;
             Timer.AutoReset = true;
             Timer.Enabled = true;
@@ -159,7 +173,7 @@ namespace DarkTunnel {
                 if(listenEP.Address.ToString() == intendedIP){
                     Console.WriteLine("pog");
                     holePunchReceivedCount++;
-                    if(holePunchReceivedCount >= 10 && !connected){
+                    if(holePunchReceivedCount >= 5 && !connected){
                         try{
                             tcpClientStream.Close();
                             tcpClientThread.Interrupt();
@@ -176,7 +190,7 @@ namespace DarkTunnel {
                 String receivedIP = "";
                 int receivedPort = 0;
 
-                if(listenEP.Address.ToString() == "150.136.166.80"){
+                if(listenEP.Address.ToString() == ep.Address.ToString()){
                     String[] msgArray = Encoding.ASCII.GetString(recvBuffer).Split(":");
 
                     receivedIP = msgArray[0];
@@ -186,7 +200,7 @@ namespace DarkTunnel {
                     }
                 }
 
-                if(receivedIP == intendedIP && holePunchReceivedCount < 10){
+                if(receivedIP == intendedIP && holePunchReceivedCount < 5){
                     intendedPort = receivedPort;
                     Console.WriteLine(intendedIP);
                     Console.WriteLine(intendedPort);
@@ -200,14 +214,6 @@ namespace DarkTunnel {
 
                 if(connected && receivedIP != "hi" && listenEP.Address.ToString() == "127.0.0.1"){
                     String recvStr = Encoding.ASCII.GetString(recvBuffer);
-                    /*
-                    int splitPos = recvStr.IndexOf("end");
-                    int removeLength = recvStr.Length - splitPos;
-                    if(splitPos > 0){
-                        recvStr.Remove(splitPos, removeLength);
-                        recvBuffer = Encoding.ASCII.GetBytes(recvStr);
-                    }
-                    */
                     udpClient.Send(recvBuffer, recvBuffer.Length, new IPEndPoint(IPAddress.Parse(intendedIP), intendedPort));
                     Console.WriteLine("huh");
                 }
@@ -227,6 +233,27 @@ namespace DarkTunnel {
 
                 mostRecentEP = listenEP;
 
+                foreach(var (key, value) in timeoutClients){
+                    bool exists = false;
+                    foreach(var value2 in connectedClients){
+                        if(key == value2){
+                            exists = true;
+                        }
+                    }
+
+                    if(!exists){
+                        Console.WriteLine($"removing {key}");
+                        timeoutClients.Remove(key);
+                    }
+
+                    Console.WriteLine($"{key} and {listenEP}");
+                    if(key.Address.ToString() == listenEP.Address.ToString()){
+                        timeoutClients[key] = 5;
+                    }
+                }
+
+                Console.WriteLine($"length {timeoutClients.Count} and {connectedClients.Count}");
+
                 Console.WriteLine("Received UDP: {0} bytes from {1}:{2}", recvBuffer.Length, listenEP.Address.ToString(), listenEP.Port.ToString());
 
                 if(listenEP.Address.ToString() != "127.0.0.1" && listenEP.Port != mediationClientPort){
@@ -235,13 +262,14 @@ namespace DarkTunnel {
 
                 if(!connectedClients.Exists(element => element.Address.ToString() == listenEP.Address.ToString()) && listenEP.Address.ToString() == intendedIP){
                     connectedClients.Add(listenEP);
+                    timeoutClients.Add(listenEP, 5);
                     Console.WriteLine("added {0}:{1} to list", listenEP.Address.ToString(), listenEP.Port.ToString());
                 }
 
                 if(listenEP.Address.ToString() == intendedIP){
                     Console.WriteLine("pog");
                     holePunchReceivedCount++;
-                    if(holePunchReceivedCount >= 10 && !connected){
+                    if(holePunchReceivedCount >= 5 && !connected){
                         connected = true;
                     }
                 }
@@ -249,7 +277,7 @@ namespace DarkTunnel {
                 String receivedIP = "";
                 int receivedPort = 0;
 
-                if(listenEP.Address.ToString() == "150.136.166.80"){
+                if(listenEP.Address.ToString() == ep.Address.ToString()){
                     String[] msgArray = Encoding.ASCII.GetString(recvBuffer).Split(":");
 
                     receivedIP = msgArray[0];
@@ -269,7 +297,7 @@ namespace DarkTunnel {
                 }
 
 
-                if(receivedIP == intendedIP && holePunchReceivedCount < 10){
+                if(receivedIP == intendedIP && holePunchReceivedCount < 5){
                     intendedPort = receivedPort;
                     Console.WriteLine(intendedIP);
                     Console.WriteLine(intendedPort);
@@ -287,20 +315,50 @@ namespace DarkTunnel {
                     int removeLength = recvStr.Length - splitPos;
                     if(splitPos > 0){
                         String[] recvSplit = recvStr.Split("end");
-                        String endpointStr = recvSplit[1];
-                        String[] endpointSplit = endpointStr.Split(":");
-                        String address = endpointSplit[0];
-                        int port = int.Parse(endpointSplit[1]);
-                        Console.WriteLine($"{address}:{port}");
+                        if(recvSplit.Length > 1){
+                            String endpointStr = recvSplit[1];
+                            String[] endpointSplit = endpointStr.Split(":");
+                            if(endpointSplit.Length > 1){
+                                String address = endpointSplit[0];
+                                int port = 65535;
+                                bool checkMap = true;
+                                try{
+                                    IPAddress.Parse(address);
+                                }
+                                catch{
+                                    address = "127.0.0.1";
+                                    checkMap = false;
+                                }
 
-                        recvStr.Remove(splitPos, removeLength);
-                        //recvBuffer = Encoding.ASCII.GetBytes(recvStr);
+                                try{
+                                    port = int.Parse(endpointSplit[1]);
+                                }
+                                catch{
+                                    port = 65535;
+                                    checkMap = false;
+                                }
+                                Console.WriteLine($"{address}:{port}");
 
-                        IPEndPoint destEP = mapping[new IPEndPoint(IPAddress.Parse(address), port)];
+                                recvStr.Remove(splitPos, removeLength);
+                                //recvBuffer = Encoding.ASCII.GetBytes(recvStr);
 
-                        Console.WriteLine(destEP);
-                        
-                        udpClient.Send(recvBuffer, recvBuffer.Length, destEP);
+                                IPEndPoint destEP = new IPEndPoint(IPAddress.Parse(address), port);
+
+                                if(checkMap){
+                                    try{
+                                        destEP = mapping[new IPEndPoint(IPAddress.Parse(address), port)];
+                                    }
+                                    catch(Exception e){
+                                        Console.WriteLine(e);
+                                        destEP = new IPEndPoint(IPAddress.Parse(address), port);
+                                    }
+                                }
+
+                                Console.WriteLine(destEP);
+                                
+                                udpClient.Send(recvBuffer, recvBuffer.Length, destEP);
+                            }
+                        }
                     }
                     Console.WriteLine("huh");
                 }

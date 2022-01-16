@@ -298,7 +298,7 @@ namespace DarkTunnel
                 if (clientMapping.ContainsKey(d.id))
                 {
                     Client c = clientMapping[d.id];
-                    c.ReceiveData(d, true);
+                    if(c.tcp != null) c.ReceiveData(d, true);
                 }
                 else
                 {

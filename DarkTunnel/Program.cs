@@ -61,11 +61,9 @@ namespace DarkTunnel
                 udpClient.Client.IOControl((IOControlCode)SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
             }
 
-            IPEndPoint ep = new IPEndPoint(IPAddress.Parse("150.136.166.80"), 6510);
-
             IPEndPoint endpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5001);
 
-            MediationClient mc = new MediationClient(tcpClient, udpClient, ep, options.remoteIP, options.mediationClientPort, endpoint, options.isServer);
+            MediationClient mc = new MediationClient(tcpClient, udpClient, options.mediationIP, options.remoteIP, options.mediationClientPort, endpoint, options.isServer);
 
             mc.TrackedClient();
             
